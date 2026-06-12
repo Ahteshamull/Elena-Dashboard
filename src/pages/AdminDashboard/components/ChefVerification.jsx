@@ -8,15 +8,89 @@ import {
   MapPin, 
   ChefHat,
   Star,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
-import useAdminStore from '../../../store/adminStore';
+import { useGetPendingProfilesQuery, useUpdateProfileStatusMutation } from '../../../redux/api/profileApiSlice';
+import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
+import { ChefProfileModal } from './ChefProfileModal';
 
 const ChefVerification = () => {
   const navigate = useNavigate();
-  const { pendingChefs, approveChef, rejectChef } = useAdminStore();
+  const [selectedChefId, setSelectedChefId] = React.useState(null);
+  const { data: apiResponse, isLoading } = useGetPendingProfilesQuery();
+  const [updateProfileStatus] = useUpdateProfileStatusMutation();
+
+  const apiProfiles = apiResponse?.data || [];
+
+  const pendingChefs = apiProfiles.map(profile => ({
+    id: profile.userId?._id || profile.userId || profile._id,
+    name: profile.fullName || profile.displayName || profile.userId?.userName || 'Unknown Chef',
+    avatar: profile.image ? `http://localhost:8005${profile.image}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || profile.displayName || 'Chef')}&background=random`,
+    location: `${profile.city || ''}, ${profile.country || ''}`.trim().replace(/^,|,$/g, '') || 'N/A',
+    specialty: profile.cuisineSpecialties?.join(' • ') || 'N/A',
+    experience: profile.yearsOfExperience ? `${profile.yearsOfExperience} yrs exp` : 'N/A',
+    documents: [
+      profile.cv ? 'CV' : null,
+      profile.governmentId ? 'ID' : null,
+      profile.foodSafetyCertificate ? 'Certificate' : null
+    ].filter(Boolean),
+    appliedDate: new Date(profile.createdAt).toLocaleDateString()
+  }));
+
+  const handleApprove = async (id) => {
+    const result = await Swal.fire({
+      title: 'Approve Chef?',
+      text: "This will approve their profile and allow them to start accepting bookings.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, approve them!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await updateProfileStatus({ id, status: 'approved' }).unwrap();
+        toast.success('Chef approved successfully');
+      } catch (err) {
+        toast.error(err?.data?.message || 'Failed to approve chef');
+      }
+    }
+  };
+
+  const handleReject = async (id) => {
+    const result = await Swal.fire({
+      title: 'Reject Chef?',
+      text: "This will reject their application. They will need to contact support or re-apply.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, reject application'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await updateProfileStatus({ id, status: 'rejected', rejectionReason: 'Did not meet platform criteria' }).unwrap();
+        toast.success('Chef rejected');
+      } catch (err) {
+        toast.error(err?.data?.message || 'Failed to reject chef');
+      }
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="animate-spin text-primary-900" size={40} />
+      </div>
+    );
+  }
+
   return (
     <div className="py-6 md:py-10 space-y-8">
       <div>
@@ -78,7 +152,7 @@ const ChefVerification = () => {
                 <div className="flex items-center gap-3 md:ml-6 pt-6 md:pt-0 border-t md:border-t-0 border-gray-50">
                   <Button 
                     variant="outline" 
-                    onClick={() => navigate('/chef-profile')}
+                    onClick={() => setSelectedChefId(chef.id)}
                     className="flex-1 md:flex-none h-11 px-6 rounded-xl text-xs font-black uppercase tracking-widest group"
                   >
                     <Eye size={16} className="mr-2 group-hover:text-accent" />
@@ -86,14 +160,14 @@ const ChefVerification = () => {
                   </Button>
                   <Button 
                     variant="primary" 
-                    onClick={() => approveChef(chef.id)}
+                    onClick={() => handleApprove(chef.id)}
                     className="flex-1 md:flex-none h-11 px-6 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700"
                   >
                     <Check size={16} className="mr-2" />
                     Approve
                   </Button>
                   <button 
-                    onClick={() => rejectChef(chef.id)}
+                    onClick={() => handleReject(chef.id)}
                     className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                   >
                     <X size={20} />
@@ -113,6 +187,13 @@ const ChefVerification = () => {
         <h4 className="text-lg font-serif text-gray-900 mb-1">Queue Clear</h4>
         <p className="text-sm text-gray-500">There are no more chefs waiting for verification.</p>
       </div>
+
+      {selectedChefId && (
+        <ChefProfileModal 
+          userId={selectedChefId} 
+          onClose={() => setSelectedChefId(null)} 
+        />
+      )}
     </div>
   );
 };

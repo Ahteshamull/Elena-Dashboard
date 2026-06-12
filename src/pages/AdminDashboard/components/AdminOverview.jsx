@@ -13,22 +13,23 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { cn } from '../../../utils/cn';
-import useAdminStore from '../../../store/adminStore';
-
-const recentActivities = [
-  { id: 1, type: 'booking', user: 'Julian Jameson', chef: 'Chef Marco', amount: '$450', status: 'Confirmed', time: '2 hours ago' },
-  { id: 2, type: 'registration', user: 'Chef Elena S.', status: 'Pending Verification', time: '5 hours ago' },
-  { id: 3, type: 'payment', user: 'Sophia L.', amount: '$1,200', status: 'Paid', time: '8 hours ago' },
-  { id: 4, type: 'dispute', user: 'Michael R.', status: 'Under Review', time: '1 day ago' },
-];
+import { useGetAdminOverviewQuery } from '../../../redux/api/adminApiSlice';
 
 const AdminOverview = () => {
-  const { activeChefs, activeUsers } = useAdminStore();
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const adminName = user.name || user.userName || 'Admin';
 
-  const totalRevenue = activeChefs.reduce((acc, chef) => {
-    const val = parseInt(chef.earnings.replace(/[^0-9]/g, '')) || 0;
-    return acc + val;
-  }, 0);
+  const { data: response, isLoading } = useGetAdminOverviewQuery();
+  const overviewData = response?.data || {
+    totalAdminRevenue: 0,
+    totalBookings: 0,
+    totalChefs: 0,
+    totalUsers: 0,
+    userRatio: "0",
+    recentActivity: []
+  };
+
+  const totalRevenue = overviewData.totalAdminRevenue;
 
   const stats = [
     { 
@@ -41,7 +42,7 @@ const AdminOverview = () => {
     },
     { 
       label: 'Total Bookings', 
-      value: '842', 
+      value: overviewData.totalBookings.toString(), 
       change: '+8.2%', 
       trend: 'up', 
       icon: Calendar,
@@ -49,7 +50,7 @@ const AdminOverview = () => {
     },
     { 
       label: 'Active Chefs', 
-      value: activeChefs.length.toString(), 
+      value: overviewData.totalChefs.toString(), 
       change: '+4.1%', 
       trend: 'up', 
       icon: ChefHat,
@@ -57,7 +58,7 @@ const AdminOverview = () => {
     },
     { 
       label: 'Active Users', 
-      value: activeUsers.length.toString(), 
+      value: overviewData.totalUsers.toString(), 
       change: '-2.4%', 
       trend: 'down', 
       icon: Users,
@@ -65,11 +66,15 @@ const AdminOverview = () => {
     },
   ];
 
+  if (isLoading) {
+    return <div className="p-8 text-center text-gray-500">Loading overview...</div>;
+  }
+
   return (
     <div className="py-6 md:py-10 space-y-10">
       {/* Header */}
       <div>
-        <h1 className="text-4xl md:text-5xl font-serif text-primary-900 mb-2">Welcome back, Admin</h1>
+        <h1 className="text-4xl md:text-5xl font-serif text-primary-900 mb-2">Welcome back, {adminName}</h1>
         <p className="text-gray-500">Here's what's happening on the platform today.</p>
       </div>
 
@@ -103,7 +108,7 @@ const AdminOverview = () => {
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-2xl font-serif text-primary-900">Recent Activity</h3>
-            <button className="text-sm font-bold text-accent uppercase tracking-widest hover:text-accent-hover">View All</button>
+        
           </div>
           
           <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden">
@@ -117,7 +122,7 @@ const AdminOverview = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {recentActivities.map((activity) => (
+                  {overviewData.recentActivity.map((activity) => (
                     <tr key={activity.id} className="hover:bg-gray-50/50 transition-colors group">
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
@@ -135,16 +140,12 @@ const AdminOverview = () => {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-primary-900">
-                              {activity.type === 'booking' ? `New Booking: ${activity.user}` :
-                               activity.type === 'registration' ? `New Chef: ${activity.user}` :
-                               activity.type === 'payment' ? `Payment Received` :
-                               `Dispute Opened`}
+                              {activity.title}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {activity.type === 'booking' ? `with ${activity.chef} • ${activity.amount}` :
-                               activity.type === 'registration' ? `Awaiting verification` :
+                              {activity.type === 'booking' ? `with ${activity.chef} for ${activity.user}` :
                                activity.type === 'payment' ? `From ${activity.user} • ${activity.amount}` :
-                               `Opened by ${activity.user}`}
+                               `${activity.user}`}
                             </p>
                           </div>
                         </div>
@@ -153,7 +154,7 @@ const AdminOverview = () => {
                         <span className={cn(
                           "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
                           activity.status === 'Confirmed' || activity.status === 'Paid' ? "bg-emerald-50 text-emerald-600" :
-                          activity.status === 'Pending Verification' ? "bg-amber-50 text-amber-600" :
+                          activity.status === 'Pending Verification' || activity.status === 'Pending' ? "bg-amber-50 text-amber-600" :
                           "bg-red-50 text-red-600"
                         )}>
                           {activity.status}
@@ -164,47 +165,59 @@ const AdminOverview = () => {
                       </td>
                     </tr>
                   ))}
+                  {overviewData.recentActivity.length === 0 && (
+                    <tr>
+                      <td colSpan="3" className="text-center py-8 text-gray-500">No recent activity found.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        {/* Quick Actions / Platform Health */}
+        {/* User Ratio */}
         <div className="space-y-6">
-          <h3 className="text-2xl font-serif text-primary-900">Platform Health</h3>
+          <h3 className="text-2xl font-serif text-primary-900">User Ratio</h3>
           <Card className="border-none shadow-sm bg-primary-900 text-white overflow-hidden relative">
             <div className="absolute top-0 right-0 p-4 opacity-10">
-              <TrendingUp size={120} />
+              <Users size={120} />
             </div>
             <CardContent className="p-8 relative z-10">
-              <p className="text-sm font-medium text-gray-400 mb-6 uppercase tracking-[0.2em]">Live Status</p>
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-sm font-bold">API Systems</span>
-                  </div>
-                  <span className="text-xs text-emerald-400 font-bold">OPTIMAL</span>
+              <p className="text-sm font-medium text-gray-400 mb-6 uppercase tracking-[0.2em]">Chefs vs Users</p>
+              
+              <div className="mb-8">
+                <div className="flex items-end gap-2 mb-2">
+                  <span className="text-5xl text-blue-500 font-bold tracking-tighter">{overviewData.userRatio || "0"}</span>
+                  <span className="text-blue-400 mb-1">chefs per user (Overall)</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-sm font-bold">Payment Gateway</span>
-                  </div>
-                  <span className="text-xs text-emerald-400 font-bold">OPTIMAL</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-amber-500" />
-                    <span className="text-sm font-bold">Pending Payouts</span>
-                  </div>
-                  <span className="text-xs text-amber-400 font-bold">$12,450</span>
+                <div className="flex items-end gap-2">
+                  <span className="text-2xl text-amber-500 font-bold tracking-tighter">{overviewData.monthlyUserRatio || "0"}</span>
+                  <span className="text-gray-400 text-sm mb-0.5">chefs per user (This Month)</span>
                 </div>
               </div>
-              <button className="w-full mt-10 py-4 bg-accent text-primary-900 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent-hover transition-colors">
-                Run System Audit
-              </button>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                      <ChefHat size={16} />
+                    </div>
+                    <span className="text-sm font-bold">Total Chefs</span>
+                  </div>
+                  <span className="text-lg text-blue-500 font-bold">{overviewData.totalChefs}</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                      <Users size={16} />
+                    </div>
+                    <span className="text-sm font-bold">Total Users</span>
+                  </div>
+                  <span className="text-lg text-purple-500 font-bold">{overviewData.totalUsers}</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

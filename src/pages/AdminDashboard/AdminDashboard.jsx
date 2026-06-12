@@ -11,6 +11,7 @@ import AllBookings from './components/AllBookings';
 import BookingDetails from './components/BookingDetails';
 import ManagePayouts from './components/ManagePayouts';
 import AdminSettings from './components/AdminSettings';
+import Notification from './components/Notification';
 
 const AdminDashboard = () => {
   // In a real app, we would check for admin role here
@@ -33,6 +34,7 @@ const AdminDashboard = () => {
             <Route path="bookings/:id" element={<BookingDetails />} />
             <Route path="payouts" element={<ManagePayouts />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="notifications" element={<Notification />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         </div>

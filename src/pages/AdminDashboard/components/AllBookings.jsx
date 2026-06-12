@@ -12,26 +12,105 @@ import {
   Clock,
   XCircle,
   Eye,
-  ChevronDown
+  Loader2
 } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Dropdown, DropdownItem } from '../../../components/ui/Dropdown';
-import useAdminStore from '../../../store/adminStore';
+import { 
+  useGetAllBookingsQuery, 
+  useUpdateBookingStatusMutation,
+  useCapturePaymentMutation
+} from '../../../redux/api/bookingApiSlice';
+import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
+import { BookingDetailsModal } from './BookingDetailsModal';
 
 const AllBookings = () => {
-  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const { platformBookings, updateBookingStatus } = useAdminStore();
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+  
+  const { data: apiResponse, isLoading } = useGetAllBookingsQuery();
+  const [updateStatusMutation] = useUpdateBookingStatusMutation();
+  const [capturePaymentMutation] = useCapturePaymentMutation();
+
+  const handleUpdateStatus = async (id, status) => {
+    const result = await Swal.fire({
+      title: 'Update Status?',
+      text: `Are you sure you want to mark this booking as ${status}?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, update it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await updateStatusMutation({ id, status: status.toLowerCase() }).unwrap();
+        toast.success(`Booking marked as ${status}`);
+      } catch (error) {
+        toast.error(error?.data?.message || 'Failed to update status');
+      }
+    }
+  };
+
+  const handleReleasePayment = async (paymentId) => {
+    if (!paymentId) return toast.error("No payment ID associated with this booking");
+    
+    const result = await Swal.fire({
+      title: 'Release Payment?',
+      text: `Are you sure you want to release this payment to the chef?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, release it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await capturePaymentMutation(paymentId).unwrap();
+        toast.success('Payment successfully released to the chef');
+      } catch (error) {
+        toast.error(error?.data?.message || 'Failed to release payment');
+      }
+    }
+  };
+
+  const rawBookings = apiResponse?.data || [];
+  const platformBookings = rawBookings.map(b => ({
+    id: b.bookingDetails?._id,
+    userName: b.clientInfo?.userName || (b.bookingDetails?.firstName ? `${b.bookingDetails.firstName} ${b.bookingDetails.lastName}` : 'Unknown'),
+    userEmail: b.bookingDetails?.email || b.clientInfo?.email || '',
+    chefName: b.chefInfo?.profile?.fullName || b.chefInfo?.userName || 'Unknown Chef',
+    date: b.bookingDetails?.eventDate ? new Date(b.bookingDetails.eventDate).toLocaleDateString() : 'N/A',
+    people: b.bookingDetails?.numberOfGuests || 0,
+    amount: `$${b.bookingDetails?.totalAmount || 0}`,
+    status: b.bookingDetails?.status ? b.bookingDetails.status.charAt(0).toUpperCase() + b.bookingDetails.status.slice(1) : 'Pending',
+    paymentStatus: b.bookingDetails?.paymentStatus || 'UNPAID',
+    paymentId: b.bookingDetails?.paymentId || null,
+    location: b.bookingDetails?.eventLocation || 'N/A'
+  }));
 
   const filteredBookings = platformBookings.filter(booking => {
-    const matchesSearch = booking.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         booking.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         booking.chefName.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = (booking.id?.toLowerCase() || '').includes(searchLower) || 
+                          (booking.userName?.toLowerCase() || '').includes(searchLower) ||
+                          (booking.userEmail?.toLowerCase() || '').includes(searchLower) ||
+                          (booking.chefName?.toLowerCase() || '').includes(searchLower);
     const matchesStatus = statusFilter === 'All' || booking.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="animate-spin text-primary-900" size={40} />
+      </div>
+    );
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -59,9 +138,12 @@ const AllBookings = () => {
             </span>
           </div>
           <div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center min-w-[120px]">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Revenue</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Revenue (20%)</span>
             <span className="text-2xl font-bold text-primary-900">
-              ${platformBookings.reduce((acc, b) => acc + parseInt(b.amount.replace(/[^0-9]/g, '')), 0).toLocaleString()}
+              ${(platformBookings
+                .filter(b => b.paymentStatus === 'SUCCESS' || b.paymentStatus === 'PAID')
+                .reduce((acc, b) => acc + parseInt(b.amount.replace(/[^0-9]/g, '')), 0) * 0.20)
+                .toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
             </span>
           </div>
         </div>
@@ -73,7 +155,7 @@ const AllBookings = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input 
             type="text" 
-            placeholder="Search by ID, user, or chef..."
+            placeholder="Search by ID, User Name, Email, or Chef..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-2xl border-none outline-none text-sm focus:ring-2 focus:ring-accent/20 transition-all"
@@ -102,18 +184,19 @@ const AllBookings = () => {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-gray-50/50">
-              <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Booking ID</th>
+              <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Location</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Client / Chef</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Date & People</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Amount</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Status</th>
+              <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Payment status</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {filteredBookings.map((booking) => (
               <tr key={booking.id} className="hover:bg-gray-50/30 transition-colors group">
-                <td className="px-6 py-6 text-sm font-bold text-gray-400">{booking.id}</td>
+                <td className="px-6 py-6 text-sm font-bold text-gray-400 max-w-[200px] truncate" title={booking.location}>{booking.location}</td>
                 <td className="px-6 py-6">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -146,6 +229,16 @@ const AllBookings = () => {
                     {booking.status}
                   </span>
                 </td>
+                <td className="px-6 py-6">
+                  <span className={cn(
+                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                    booking.paymentStatus === 'SUCCESS' || booking.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-600'
+                  )}>
+                    {booking.paymentStatus}
+                  </span>
+                </td>
+
+                {/* button */}
                 <td className="px-6 py-6 text-right">
                   <Dropdown 
                     trigger={
@@ -154,22 +247,27 @@ const AllBookings = () => {
                       </button>
                     }
                   >
-                    <DropdownItem icon={Eye} onClick={() => navigate(`/admin/bookings/${booking.id}`)}>View Details</DropdownItem>
-                    {booking.status === 'Pending' && (
-                      <DropdownItem icon={CheckCircle2} variant="success" onClick={() => updateBookingStatus(booking.id, 'Confirmed')}>
+                    <DropdownItem icon={Eye} onClick={() => setSelectedBookingId(booking.id)}>View Details</DropdownItem>
+                    {/* {booking.status === 'Pending' && (
+                      <DropdownItem icon={CheckCircle2} variant="success" onClick={() => handleUpdateStatus(booking.id, 'Confirmed')}>
                         Confirm Booking
                       </DropdownItem>
-                    )}
+                    )} */}
                     {booking.status === 'Confirmed' && (
-                      <DropdownItem icon={CheckCircle2} variant="success" onClick={() => updateBookingStatus(booking.id, 'Completed')}>
+                      <DropdownItem icon={CheckCircle2} variant="success" onClick={() => handleUpdateStatus(booking.id, 'Completed')}>
                         Mark Completed
                       </DropdownItem>
                     )}
-                    {['Pending', 'Confirmed'].includes(booking.status) && (
-                      <DropdownItem icon={XCircle} variant="danger" onClick={() => updateBookingStatus(booking.id, 'Cancelled')}>
-                        Cancel Booking
+                    {booking.paymentStatus === 'HOLD' && booking.paymentId && (
+                      <DropdownItem icon={DollarSign} variant="success" onClick={() => handleReleasePayment(booking.paymentId)}>
+                        Release Payment
                       </DropdownItem>
                     )}
+                    {/* {['Pending', 'Confirmed'].includes(booking.status) && (
+                      <DropdownItem icon={XCircle} variant="danger" onClick={() => handleUpdateStatus(booking.id, 'Cancelled')}>
+                        Cancel Booking
+                      </DropdownItem>
+                    )} */}
                   </Dropdown>
                 </td>
               </tr>
@@ -185,7 +283,7 @@ const AllBookings = () => {
             <CardContent className="p-5">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">{booking.id}</span>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block truncate max-w-[200px]" title={booking.location}>{booking.location}</span>
                   <h4 className="font-bold text-primary-900">{booking.chefName}</h4>
                   <p className="text-xs text-gray-500">for {booking.userName}</p>
                 </div>
@@ -210,7 +308,7 @@ const AllBookings = () => {
 
               <div className="flex gap-2">
                 <button 
-                  onClick={() => navigate(`/admin/bookings/${booking.id}`)}
+                  onClick={() => setSelectedBookingId(booking.id)}
                   className="flex-1 py-3 bg-gray-50 text-primary-900 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-all"
                 >
                   View Details
@@ -224,12 +322,12 @@ const AllBookings = () => {
                   className="flex-none"
                 >
                   {booking.status === 'Pending' && (
-                    <DropdownItem icon={CheckCircle2} variant="success" onClick={() => updateBookingStatus(booking.id, 'Confirmed')}>
+                    <DropdownItem icon={CheckCircle2} variant="success" onClick={() => handleUpdateStatus(booking.id, 'Confirmed')}>
                       Confirm
                     </DropdownItem>
                   )}
                   {['Pending', 'Confirmed'].includes(booking.status) && (
-                    <DropdownItem icon={XCircle} variant="danger" onClick={() => updateBookingStatus(booking.id, 'Cancelled')}>
+                    <DropdownItem icon={XCircle} variant="danger" onClick={() => handleUpdateStatus(booking.id, 'Cancelled')}>
                       Cancel
                     </DropdownItem>
                   )}
@@ -249,6 +347,13 @@ const AllBookings = () => {
           <h3 className="text-2xl font-serif text-primary-900 mb-2">No bookings found</h3>
           <p className="text-gray-500">Try adjusting your filters.</p>
         </div>
+      )}
+
+      {selectedBookingId && (
+        <BookingDetailsModal 
+          bookingId={selectedBookingId} 
+          onClose={() => setSelectedBookingId(null)} 
+        />
       )}
     </div>
   );

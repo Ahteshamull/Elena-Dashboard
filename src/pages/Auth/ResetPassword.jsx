@@ -4,36 +4,54 @@ import { Lock, ShieldCheck, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } fro
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent } from '../../components/ui/Card';
+import { toast } from 'react-toastify';
+import { useResetPasswordMutation } from '../../redux/api/authApiSlice';
 
 export const ResetPassword = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: ''
   });
+  const [resetPassword, { isLoading: loading }] = useResetPasswordMutation();
 
-  const handleReset = (e) => {
+  const handleReset = async (e) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
-    setLoading(true);
+    const email = localStorage.getItem('resetEmail');
+    if (!email) {
+      toast.error("Email not found. Please start the password reset process again.");
+      return;
+    }
 
-    // Simulate password update
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const response = await resetPassword({
+        email,
+        newPassword: formData.password,
+        confirmPassword: formData.confirmPassword
+      }).unwrap();
+
       setSuccess(true);
+      toast.success(response?.message || "Password reset successfully!");
+
+      // Clear tokens
+      localStorage.removeItem('resetEmail');
+      localStorage.removeItem('resettoken');
 
       // Auto redirect to login after 3 seconds
       setTimeout(() => {
         navigate('/auth/login');
       }, 3000);
-    }, 2000);
+    } catch (err) {
+      console.error('Failed to reset password:', err);
+      toast.error(err?.data?.message || err?.message || "Failed to reset password");
+    }
   };
 
   return (

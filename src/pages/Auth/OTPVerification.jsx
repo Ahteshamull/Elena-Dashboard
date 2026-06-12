@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, ArrowRight, Loader2, ChevronLeft, Timer } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
+import { toast } from 'react-toastify';
+import { useVerifyOtpMutation, useResendOtpMutation } from '../../redux/api/authApiSlice';
 
 export const OTPVerification = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(59);
   const inputRefs = useRef([]);
+  const [verifyOtp, { isLoading: loading }] = useVerifyOtpMutation();
+  const [resendOtp, { isLoading: isResending }] = useResendOtpMutation();
 
   useEffect(() => {
     const countdown = setInterval(() => {
@@ -36,23 +39,45 @@ export const OTPVerification = () => {
     }
   };
 
-  const handleVerify = (e) => {
+  const handleVerify = async (e) => {
     e.preventDefault();
     const otpValue = otp.join('');
     if (otpValue.length < 6) return;
 
-    setLoading(true);
-    // Simulate verification
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const response = await verifyOtp({ otp: otpValue }).unwrap();
+      
+      // The backend returns the email upon successful OTP verification.
+      // Save it so ResetPassword can use it.
+      if (response?.email) {
+        localStorage.setItem('resetEmail', response.email);
+      }
+
+      toast.success(response?.message || "OTP verified successfully!");
       navigate('/auth/reset-password');
-    }, 1500);
+    } catch (err) {
+      console.error('Failed to verify OTP:', err);
+      toast.error(err?.data?.message || err?.message || "Invalid OTP");
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (timer > 0) return;
-    setTimer(59);
-    // Simulate resend logic
+    
+    const email = localStorage.getItem('resetEmail');
+    if (!email) {
+      toast.error("Email not found. Please start the password reset process again.");
+      return;
+    }
+
+    try {
+      const response = await resendOtp({ email }).unwrap();
+      toast.success(response?.message || "OTP resent successfully!");
+      setTimer(59);
+    } catch (err) {
+      console.error('Failed to resend OTP:', err);
+      toast.error(err?.data?.message || err?.message || "Failed to resend OTP");
+    }
   };
 
   return (
@@ -125,10 +150,10 @@ export const OTPVerification = () => {
                   <button
                     type="button"
                     onClick={handleResend}
-                    disabled={timer > 0}
-                    className={`font-bold transition-colors ${timer > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-accent hover:text-primary-900'}`}
+                    disabled={timer > 0 || isResending}
+                    className={`font-bold transition-colors ${timer > 0 || isResending ? 'text-gray-300 cursor-not-allowed' : 'text-accent hover:text-primary-900'}`}
                   >
-                    Resend {timer > 0 && `(${timer}s)`}
+                    {isResending ? 'Resending...' : `Resend ${timer > 0 ? `(${timer}s)` : ''}`}
                   </button>
                 </div>
               </div>

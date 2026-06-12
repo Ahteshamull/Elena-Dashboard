@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { LogOut, ShieldCheck, Bell } from 'lucide-react';
+import { useGetNotificationsQuery } from '../../redux/api/notificationApiSlice';
 
 export default function Header() {
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const isAuthPage = location.pathname.startsWith('/auth');
+  
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const userName = user.name || user.userName || 'System Administrator';
+  
+  const { data: notificationsData } = useGetNotificationsQuery(undefined, { skip: isAuthPage });
+  const unreadCount = notificationsData?.data?.filter(n => !n.isRead).length || 0;
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -38,8 +45,19 @@ export default function Header() {
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-primary-50 rounded-full border border-primary-100">
             <ShieldCheck size={16} className="text-accent" />
-            <span className="text-sm font-bold text-primary-900">System Administrator</span>
+            <span className="text-sm font-bold text-primary-900">{userName}</span>
           </div>
+
+          <Link 
+            to="/admin/notifications"
+            className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white text-gray-400 hover:text-primary-900 hover:bg-primary-50 transition-all border border-gray-100 group shadow-sm"
+            title="Notifications"
+          >
+            <Bell size={18} className="group-hover:scale-110 transition-transform" />
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            )}
+          </Link>
           
           <button 
             onClick={handleLogout}

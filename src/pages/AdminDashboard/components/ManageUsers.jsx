@@ -13,25 +13,85 @@ import {
   Trash2,
   UserX,
   UserCheck,
-  History
+  History,
+  Eye
 } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Dropdown, DropdownItem } from '../../../components/ui/Dropdown';
-import useAdminStore from '../../../store/adminStore';
+import { useGetAllUsersByRoleQuery, useDeleteUserMutation, useBlockUserMutation } from '../../../redux/api/userApiSlice';
+import { Loader2 } from 'lucide-react';
+import { UserProfileModal } from './UserProfileModal';
+import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
 
 const ManageUsers = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const { activeUsers, toggleUserStatus, deleteUser } = useAdminStore();
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  
+  const { data: apiResponse, isLoading } = useGetAllUsersByRoleQuery('user');
+  const [deleteUserMutation] = useDeleteUserMutation();
+  const [blockUserMutation] = useBlockUserMutation();
 
-  const filteredUsers = activeUsers.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
+  const handleToggleStatus = async (id) => {
+    try {
+      await blockUserMutation(id).unwrap();
+      toast.success('User status updated successfully');
+    } catch (error) {
+      toast.error(error?.data?.message || 'Failed to update status');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You are about to delete this user. This action cannot be undone.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await deleteUserMutation(id).unwrap();
+        toast.success('User deleted successfully');
+      } catch (error) {
+        toast.error(error?.data?.message || 'Failed to delete user');
+      }
+    }
+  };
+
+  const apiUsers = apiResponse?.data || [];
+
+  const mappedUsers = apiUsers.map(user => ({
+    id: user._id,
+    name: user.profile?.fullName || user.userName || 'Unknown',
+    email: user.email,
+    status: user.status === 'active' ? 'Active' : 'Suspended',
+    bookings: 0,
+    spend: '$0',
+    joined: new Date(user.createdAt).toLocaleDateString()
+  }));
+
+  const filteredUsers = mappedUsers.filter(user => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = user.name.toLowerCase().includes(searchLower) || 
+                         (user.email || '').toLowerCase().includes(searchLower);
     const matchesStatus = statusFilter === 'All' || user.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="animate-spin text-primary-900" size={40} />
+      </div>
+    );
+  }
 
   return (
     <div className="py-6 md:py-10 space-y-8">
@@ -44,11 +104,11 @@ const ManageUsers = () => {
         <div className="flex items-center gap-4">
           <div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center min-w-[120px]">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Users</span>
-            <span className="text-2xl font-bold text-primary-900">{activeUsers.length}</span>
+            <span className="text-2xl font-bold text-primary-900">{mappedUsers.length}</span>
           </div>
           <div className="bg-emerald-50 px-6 py-3 rounded-2xl border border-emerald-100 flex flex-col items-center min-w-[120px]">
             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60 mb-1">Active</span>
-            <span className="text-2xl font-bold text-emerald-600">{activeUsers.filter(u => u.status === 'Active').length}</span>
+            <span className="text-2xl font-bold text-emerald-600">{mappedUsers.filter(u => u.status === 'Active').length}</span>
           </div>
         </div>
       </div>
@@ -136,19 +196,22 @@ const ManageUsers = () => {
                       </button>
                     }
                   >
+                    <DropdownItem icon={Eye} onClick={() => setSelectedUserId(user.id)}>
+                      View Profile
+                    </DropdownItem>
                     <DropdownItem icon={History} onClick={() => navigate(`/admin/users/${user.id}/bookings`)}>
                       Booking History
                     </DropdownItem>
                     <DropdownItem 
                       icon={user.status === 'Active' ? UserX : UserCheck} 
                       variant={user.status === 'Active' ? 'danger' : 'success'}
-                      onClick={() => toggleUserStatus(user.id)}
+                      onClick={() => handleToggleStatus(user.id)}
                     >
-                      {user.status === 'Active' ? 'Suspend User' : 'Activate User'}
+                      {user.status === 'Active' ? 'Suspend' : 'Activate'}
                     </DropdownItem>
                     <div className="h-px bg-gray-100 my-1" />
-                    <DropdownItem icon={Trash2} variant="danger" onClick={() => deleteUser(user.id)}>
-                      Delete User
+                    <DropdownItem icon={Trash2} variant="danger" onClick={() => handleDelete(user.id)}>
+                      Delete
                     </DropdownItem>
                   </Dropdown>
                 </td>
@@ -197,6 +260,12 @@ const ManageUsers = () => {
 
               <div className="flex gap-2">
                 <button 
+                  onClick={() => setSelectedUserId(user.id)}
+                  className="flex-1 py-3 bg-gray-50 text-primary-900 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-all"
+                >
+                  View Profile
+                </button>
+                <button 
                   onClick={() => navigate(`/admin/users/${user.id}/bookings`)}
                   className="flex-1 py-3 bg-gray-50 text-primary-900 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-all"
                 >
@@ -213,12 +282,12 @@ const ManageUsers = () => {
                   <DropdownItem 
                     icon={user.status === 'Active' ? UserX : UserCheck} 
                     variant={user.status === 'Active' ? 'danger' : 'success'}
-                    onClick={() => toggleUserStatus(user.id)}
+                    onClick={() => handleToggleStatus(user.id)}
                   >
                     {user.status === 'Active' ? 'Suspend' : 'Activate'}
                   </DropdownItem>
                   <div className="h-px bg-gray-100 my-1" />
-                  <DropdownItem icon={Trash2} variant="danger" onClick={() => deleteUser(user.id)}>
+                  <DropdownItem icon={Trash2} variant="danger" onClick={() => handleDelete(user.id)}>
                     Delete
                   </DropdownItem>
                 </Dropdown>
@@ -243,6 +312,13 @@ const ManageUsers = () => {
             Clear all filters
           </button>
         </div>
+      )}
+
+      {selectedUserId && (
+        <UserProfileModal 
+          userId={selectedUserId} 
+          onClose={() => setSelectedUserId(null)} 
+        />
       )}
     </div>
   );

@@ -4,26 +4,34 @@ import { Mail, ShieldCheck, ArrowRight, Loader2, ChevronLeft, CheckCircle2 } fro
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent } from '../../components/ui/Card';
+import { useForgotPasswordMutation } from '../../redux/api/authApiSlice';
+import { toast } from 'react-toastify';
 
 export const ForgotPassword = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
   const [success, setSuccess] = useState(false);
+  const [forgotPassword, { isLoading: loading }] = useForgotPasswordMutation();
 
-  const handleForgotPassword = (e) => {
+  const handleForgotPassword = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    // Simulate email sending
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const response = await forgotPassword({ email }).unwrap();
       setSuccess(true);
+      toast.success(response.message || "OTP sent to your email successfully!");
+      
+      // Store email for reset password step
+      localStorage.setItem('resetEmail', email);
 
       // Auto redirect to OTP verification page after 2.5 seconds
       setTimeout(() => {
         navigate('/auth/verify-otp');
       }, 2500);
-    }, 1500);
+    } catch (err) {
+      console.error('Failed to send OTP:', err);
+      toast.error(err?.data?.message || err?.message || "Failed to send OTP");
+    }
   };
 
   return (
@@ -69,6 +77,8 @@ export const ForgotPassword = () => {
                     pl="pl-9"
                     iconClassName="left-2.5"
                     className="bg-gray-50/50 border-gray-100 focus:bg-white focus:ring-4 focus:ring-primary-900/5 rounded-2xl h-14 font-medium transition-all"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
 

@@ -15,19 +15,66 @@ import {
 import { cn } from '../../../utils/cn';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Dropdown, DropdownItem } from '../../../components/ui/Dropdown';
-import useAdminStore from '../../../store/adminStore';
+import { useGetAllPaymentsQuery, useCapturePaymentMutation } from '../../../redux/api/bookingApiSlice';
+import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
 
 const ManagePayouts = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const { payoutRequests, processPayout } = useAdminStore();
+  
+  const { data: apiResponse, isLoading } = useGetAllPaymentsQuery();
+  const [capturePaymentMutation] = useCapturePaymentMutation();
+
+  const rawPayments = apiResponse?.data || [];
+  
+  const payoutRequests = rawPayments.map(p => ({
+    id: p._id,
+    chefName: p.chef?.userName || 'Unknown Chef',
+    clientName: p.client?.userName || 'Unknown Client',
+    amount: `$${p.amount}`,
+    adminAmount: `$${p.admin_amount}`,
+    chefAmount: `$${p.influencer_amount}`,
+    method: p.provider || 'Stripe',
+    requestedDate: new Date(p.createdAt).toLocaleDateString(),
+    daysPending: p.daysPending,
+    rawStatus: p.status,
+    status: p.status === 'HOLD' ? 'Pending' : p.status === 'SUCCESS' ? 'Paid' : ['FAILED', 'CANCELLED'].includes(p.status) ? 'Rejected' : 'Awaiting'
+  }));
 
   const filteredRequests = payoutRequests.filter(req => {
-    const matchesSearch = req.chefName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         req.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = req.chefName.toLowerCase().includes(searchLower) || 
+                         req.id.toLowerCase().includes(searchLower) ||
+                         req.clientName.toLowerCase().includes(searchLower);
     const matchesStatus = statusFilter === 'All' || req.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const processPayout = async (paymentId, action) => {
+    if (action === 'Paid') {
+      const result = await Swal.fire({
+        title: 'Release Payment?',
+        text: `Are you sure you want to release this payout to the chef?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#059669',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, release it!'
+      });
+
+      if (result.isConfirmed) {
+        try {
+          await capturePaymentMutation(paymentId).unwrap();
+          toast.success('Payout successfully processed');
+        } catch (error) {
+          toast.error(error?.data?.message || 'Failed to process payout');
+        }
+      }
+    } else {
+      toast.info('Rejecting payouts requires manual Stripe dashboard intervention.');
+    }
+  };
 
   const getStatusInfo = (status) => {
     switch (status) {
@@ -56,15 +103,15 @@ const ManagePayouts = () => {
         </div>
         <div className="flex items-center gap-4">
           <div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center min-w-[140px]">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Pending Volume</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Pending Payouts</span>
             <span className="text-2xl font-bold text-amber-600">
-              ${payoutRequests.filter(r => r.status === 'Pending').reduce((acc, curr) => acc + parseInt(curr.amount.replace('$', '').replace(',', '')), 0).toLocaleString()}
+              ${payoutRequests.filter(r => r.status === 'Pending').reduce((acc, curr) => acc + parseInt(curr.chefAmount.replace('$', '').replace(',', '')), 0).toLocaleString()}
             </span>
           </div>
           <div className="bg-emerald-50 px-6 py-3 rounded-2xl border border-emerald-100 flex flex-col items-center min-w-[140px]">
-            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60 mb-1">Total Paid</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60 mb-1">Total Paid To Chefs</span>
             <span className="text-2xl font-bold text-emerald-600">
-              ${payoutRequests.filter(r => r.status === 'Paid').reduce((acc, curr) => acc + parseInt(curr.amount.replace('$', '').replace(',', '')), 0).toLocaleString()}
+              ${payoutRequests.filter(r => r.status === 'Paid').reduce((acc, curr) => acc + parseInt(curr.chefAmount.replace('$', '').replace(',', '')), 0).toLocaleString()}
             </span>
           </div>
         </div>
@@ -105,8 +152,9 @@ const ManagePayouts = () => {
           <thead>
             <tr className="bg-gray-50/50">
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Request ID</th>
+              <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Client</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Chef</th>
-              <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Amount</th>
+              <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Total / Earning</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Method</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Requested</th>
               <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-gray-400">Status</th>
@@ -119,7 +167,10 @@ const ManagePayouts = () => {
               const MethodIcon = getMethodIcon(req.method);
               return (
                 <tr key={req.id} className="hover:bg-gray-50/30 transition-colors">
-                  <td className="px-6 py-6 text-xs font-bold text-gray-400">{req.id}</td>
+                  <td className="px-6 py-6 text-xs font-bold text-gray-400 max-w-[100px] truncate" title={req.id}>{req.id}</td>
+                  <td className="px-6 py-6">
+                    <span className="text-sm font-bold text-gray-600">{req.clientName}</span>
+                  </td>
                   <td className="px-6 py-6">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-primary-900 flex items-center justify-center text-white text-[10px] font-bold">
@@ -128,7 +179,13 @@ const ManagePayouts = () => {
                       <span className="text-sm font-bold text-primary-900">{req.chefName}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-6 text-sm font-bold text-primary-900">{req.amount}</td>
+                  <td className="px-6 py-6">
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-primary-900">Total: {req.amount}</p>
+                      <p className="text-xs text-emerald-600 font-bold">Chef: {req.chefAmount}</p>
+                      <p className="text-xs text-gray-500">Admin: {req.adminAmount}</p>
+                    </div>
+                  </td>
                   <td className="px-6 py-6">
                     <div className="flex items-center gap-2 text-gray-500">
                       <MethodIcon size={16} />
@@ -153,12 +210,9 @@ const ManagePayouts = () => {
                         <DropdownItem icon={CheckCircle2} variant="success" onClick={() => processPayout(req.id, 'Paid')}>
                           Approve Payout
                         </DropdownItem>
-                        <DropdownItem icon={XCircle} variant="danger" onClick={() => processPayout(req.id, 'Rejected')}>
-                          Reject Request
-                        </DropdownItem>
                       </Dropdown>
                     ) : (
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-300">Processed</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-300">{req.status === 'Paid' ? 'Processed' : 'N/A'}</span>
                     )}
                   </td>
                 </tr>
@@ -183,7 +237,8 @@ const ManagePayouts = () => {
                     </div>
                     <div>
                       <h4 className="font-bold text-primary-900 text-sm">{req.chefName}</h4>
-                      <p className="text-[10px] text-gray-400 font-medium">{req.id}</p>
+                      <p className="text-[10px] text-gray-400 font-medium max-w-[120px] truncate" title={req.id}>{req.id}</p>
+                      <p className="text-[10px] text-gray-500 font-medium">For: {req.clientName}</p>
                     </div>
                   </div>
                   <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest", status.color)}>
@@ -193,8 +248,9 @@ const ManagePayouts = () => {
 
                 <div className="grid grid-cols-2 gap-4 py-4 border-y border-gray-50 mb-4">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Amount</p>
-                    <p className="text-sm font-bold text-primary-900">{req.amount}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Earning</p>
+                    <p className="text-sm font-bold text-emerald-600">{req.chefAmount}</p>
+                    <p className="text-[10px] text-gray-400">Total: {req.amount}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Method</p>

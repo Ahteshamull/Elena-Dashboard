@@ -21,20 +21,91 @@ import {
 import { cn } from '../../../utils/cn';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Dropdown, DropdownItem } from '../../../components/ui/Dropdown';
-import useAdminStore from '../../../store/adminStore';
+import { useGetAllUsersByRoleQuery, useDeleteUserMutation, useBlockUserMutation } from '../../../redux/api/userApiSlice';
+import { Loader2 } from 'lucide-react';
+import { ChefProfileModal } from './ChefProfileModal';
+import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
 
 const ManageChefs = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const { activeChefs, toggleChefStatus, deleteChef } = useAdminStore();
+  const [specialtyFilter, setSpecialtyFilter] = useState('All');
+  const [dateFilter, setDateFilter] = useState('');
+  const [selectedChefId, setSelectedChefId] = useState(null);
+  
+  const { data: apiResponse, isLoading } = useGetAllUsersByRoleQuery('chef');
+  const [deleteUserMutation] = useDeleteUserMutation();
+  const [blockUserMutation] = useBlockUserMutation();
 
-  const filteredChefs = activeChefs.filter(chef => {
+  const handleToggleStatus = async (id) => {
+    try {
+      await blockUserMutation(id).unwrap();
+      toast.success('Chef status updated successfully');
+    } catch (error) {
+      toast.error(error?.data?.message || 'Failed to update status');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You are about to delete this chef. This action cannot be undone.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await deleteUserMutation(id).unwrap();
+        toast.success('Chef deleted successfully');
+      } catch (error) {
+        toast.error(error?.data?.message || 'Failed to delete chef');
+      }
+    }
+  };
+
+  const apiChefs = apiResponse?.data || [];
+
+  // Extract all unique specialties for the dropdown
+  const allSpecialties = Array.from(new Set(apiChefs.flatMap(c => c.profile?.cuisineSpecialties || []))).sort();
+
+  const mappedChefs = apiChefs.map(chef => ({
+    id: chef._id,
+    name: chef.profile?.fullName || chef.userName || 'Unknown',
+    email: chef.email || '',
+    cuisineSpecialties: chef.profile?.cuisineSpecialties || [],
+    availableDates: chef.profile?.availableDates || [],
+    specialty: chef.profile?.cuisineSpecialties?.join(' • ') || 'N/A',
+    image: chef.profile?.image ? `http://localhost:8005${chef.profile.image}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(chef.profile?.fullName || chef.userName || 'Chef')}&background=random`,
+    status: chef.status === 'active' ? 'Active' : 'Suspended',
+    rating: 0,
+    reviews: 0,
+    earnings: chef.profile?.minimumBookingAmount ? `$${chef.profile.minimumBookingAmount}` : '$0',
+    joinedDate: new Date(chef.createdAt).toLocaleDateString(),
+  }));
+
+  const filteredChefs = mappedChefs.filter(chef => {
     const matchesSearch = chef.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         chef.specialty.toLowerCase().includes(searchTerm.toLowerCase());
+                          chef.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'All' || chef.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesSpecialty = specialtyFilter === 'All' || chef.cuisineSpecialties.includes(specialtyFilter);
+    const matchesDate = !dateFilter || chef.availableDates.some(d => new Date(d).toISOString().split('T')[0] === dateFilter);
+    
+    return matchesSearch && matchesStatus && matchesSpecialty && matchesDate;
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="animate-spin text-primary-900" size={40} />
+      </div>
+    );
+  }
 
   return (
     <div className="py-6 md:py-10 space-y-8">
@@ -47,32 +118,50 @@ const ManageChefs = () => {
         <div className="flex items-center gap-4">
           <div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center min-w-[120px]">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Chefs</span>
-            <span className="text-2xl font-bold text-primary-900">{activeChefs.length}</span>
+            <span className="text-2xl font-bold text-primary-900">{mappedChefs.length}</span>
           </div>
           <div className="bg-emerald-50 px-6 py-3 rounded-2xl border border-emerald-100 flex flex-col items-center min-w-[120px]">
             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60 mb-1">Active</span>
-            <span className="text-2xl font-bold text-emerald-600">{activeChefs.filter(c => c.status === 'Active').length}</span>
+            <span className="text-2xl font-bold text-emerald-600">{mappedChefs.filter(c => c.status === 'Active').length}</span>
           </div>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+      <div className="flex flex-col xl:flex-row gap-4 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input 
             type="text" 
-            placeholder="Search by name, specialty, or location..."
+            placeholder="Search by name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-2xl border-none outline-none text-sm focus:ring-2 focus:ring-accent/20 transition-all"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <select 
+            value={specialtyFilter}
+            onChange={(e) => setSpecialtyFilter(e.target.value)}
+            className="px-4 py-3 bg-gray-50 rounded-2xl border-none outline-none text-sm font-bold text-gray-600 focus:ring-2 focus:ring-accent/20 cursor-pointer min-w-[140px]"
+          >
+            <option value="All">All Specialties</option>
+            {allSpecialties.map(spec => (
+              <option key={spec} value={spec}>{spec}</option>
+            ))}
+          </select>
+          <div className="relative">
+            <input 
+              type="date" 
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="px-4 py-3 bg-gray-50 rounded-2xl border-none outline-none text-sm font-bold text-gray-600 focus:ring-2 focus:ring-accent/20 cursor-pointer min-w-[140px]"
+            />
+          </div>
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-6 py-3 bg-gray-50 rounded-2xl border-none outline-none text-sm font-bold text-gray-600 focus:ring-2 focus:ring-accent/20 cursor-pointer appearance-none min-w-[140px]"
+            className="px-6 py-3 bg-gray-50 rounded-2xl border-none outline-none text-sm font-bold text-gray-600 focus:ring-2 focus:ring-accent/20 cursor-pointer min-w-[140px]"
           >
             <option value="All">All Status</option>
             <option value="Active">Active</option>
@@ -140,19 +229,19 @@ const ManageChefs = () => {
                       </button>
                     }
                   >
-                    <DropdownItem icon={Eye} onClick={() => navigate('/chef-profile')}>
+                    <DropdownItem icon={Eye} onClick={() => setSelectedChefId(chef.id)}>
                       View Profile
                     </DropdownItem>
                     <DropdownItem 
                       icon={chef.status === 'Active' ? UserX : UserCheck} 
                       variant={chef.status === 'Active' ? 'danger' : 'success'}
-                      onClick={() => toggleChefStatus(chef.id)}
+                      onClick={() => handleToggleStatus(chef.id)}
                     >
-                      {chef.status === 'Active' ? 'Suspend Chef' : 'Activate Chef'}
+                      {chef.status === 'Active' ? 'Suspend' : 'Activate'}
                     </DropdownItem>
                     <div className="h-px bg-gray-100 my-1" />
-                    <DropdownItem icon={Trash2} variant="danger" onClick={() => deleteChef(chef.id)}>
-                      Delete Account
+                    <DropdownItem icon={Trash2} variant="danger" onClick={() => handleDelete(chef.id)}>
+                      Delete
                     </DropdownItem>
                   </Dropdown>
                 </td>
@@ -199,7 +288,7 @@ const ManageChefs = () => {
 
               <div className="flex gap-2">
                 <button 
-                  onClick={() => navigate('/chef-profile')}
+                  onClick={() => setSelectedChefId(chef.id)}
                   className="flex-1 py-3 bg-primary-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary-800 transition-colors"
                 >
                   View Profile
@@ -215,12 +304,12 @@ const ManageChefs = () => {
                   <DropdownItem 
                     icon={chef.status === 'Active' ? UserX : UserCheck} 
                     variant={chef.status === 'Active' ? 'danger' : 'success'}
-                    onClick={() => toggleChefStatus(chef.id)}
+                    onClick={() => handleToggleStatus(chef.id)}
                   >
                     {chef.status === 'Active' ? 'Suspend' : 'Activate'}
                   </DropdownItem>
                   <div className="h-px bg-gray-100 my-1" />
-                  <DropdownItem icon={Trash2} variant="danger" onClick={() => deleteChef(chef.id)}>
+                  <DropdownItem icon={Trash2} variant="danger" onClick={() => handleDelete(chef.id)}>
                     Delete
                   </DropdownItem>
                 </Dropdown>
@@ -239,12 +328,24 @@ const ManageChefs = () => {
           <h3 className="text-2xl font-serif text-primary-900 mb-2">No chefs found</h3>
           <p className="text-gray-500">Try adjusting your search or filters to find what you're looking for.</p>
           <button 
-            onClick={() => { setSearchTerm(''); setStatusFilter('All'); }}
+            onClick={() => { 
+              setSearchTerm(''); 
+              setStatusFilter('All'); 
+              setSpecialtyFilter('All');
+              setDateFilter('');
+            }}
             className="mt-8 text-sm font-bold text-accent uppercase tracking-widest"
           >
             Clear all filters
           </button>
         </div>
+      )}
+
+      {selectedChefId && (
+        <ChefProfileModal 
+          userId={selectedChefId} 
+          onClose={() => setSelectedChefId(null)} 
+        />
       )}
     </div>
   );

@@ -13,7 +13,7 @@ const ProtectedRoute = ({ children }) => {
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
 
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'superAdmin')) {
     return <Navigate to="/auth/login" replace />;
   }
 
