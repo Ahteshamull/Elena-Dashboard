@@ -115,7 +115,7 @@ const useAdminStore = create((set) => ({
   settings: {
     platformName: 'Tableli',
     supportEmail: 'support@elenatableli.com',
-    serviceFee: 15,
+    serviceFee: 20,
     minimumBooking: 100,
     maintenanceMode: false,
     notifications: {

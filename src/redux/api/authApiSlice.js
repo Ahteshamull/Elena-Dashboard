@@ -37,7 +37,14 @@ export const authApiSlice = apiSlice.injectEndpoints({
         body: data,
       }),
     }),
+    changePassword: builder.mutation({
+      query: (data) => ({
+        url: "/admin/change-password",
+        method: "PUT",
+        body: data,
+      }),
+    }),
   }),
 });
 
-export const { useForgotPasswordMutation, useVerifyOtpMutation, useResendOtpMutation, useResetPasswordMutation, useLoginMutation } = authApiSlice;
+export const { useForgotPasswordMutation, useVerifyOtpMutation, useResendOtpMutation, useResetPasswordMutation, useLoginMutation, useChangePasswordMutation } = authApiSlice;

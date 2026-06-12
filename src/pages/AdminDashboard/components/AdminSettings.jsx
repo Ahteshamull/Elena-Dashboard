@@ -19,6 +19,7 @@ import JoditEditor from 'jodit-react';
 import { toast } from 'react-toastify';
 import { useCreateLegalDocMutation, useGetLegalDocQuery } from '../../../redux/api/legalDocApiSlice';
 import { useCreateFaqMutation, useGetFaqsQuery, useUpdateFaqMutation, useDeleteFaqMutation } from '../../../redux/api/faqApiSlice';
+import { useChangePasswordMutation } from '../../../redux/api/authApiSlice';
 import { cn } from '../../../utils/cn';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
@@ -51,6 +52,14 @@ const AdminSettings = () => {
   const [createFaq, { isLoading: isCreatingFaq }] = useCreateFaqMutation();
   const [updateFaq, { isLoading: isUpdatingFaq }] = useUpdateFaqMutation();
   const [deleteFaq] = useDeleteFaqMutation();
+  const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation();
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
 
   const { data: privacyData } = useGetLegalDocQuery('privacyPolicy');
   const { data: termsData } = useGetLegalDocQuery('termsAndCondition');
@@ -126,6 +135,30 @@ const AdminSettings = () => {
       } catch (err) {
         toast.error('Failed to delete FAQ');
       }
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('New password and confirm password do not match');
+      return;
+    }
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+    try {
+      await changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword
+      }).unwrap();
+      toast.success('Password changed successfully!');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordForm(false);
+    } catch (err) {
+      toast.error(err?.data?.message || 'Failed to change password');
     }
   };
 
@@ -432,10 +465,66 @@ const AdminSettings = () => {
                   <div className="space-y-4">
                     <h3 className="text-lg font-serif text-primary-900">Admin Authentication</h3>
                     <div className="space-y-4">
-                      <Button variant="outline" className="w-full justify-start gap-3 py-6 rounded-2xl border-gray-100 hover:bg-gray-50 transition-all font-bold text-sm">
-                        <Lock size={18} className="text-accent" />
-                        Change Admin Password
-                      </Button>
+                      {!showPasswordForm ? (
+                        <Button 
+                          onClick={() => setShowPasswordForm(true)}
+                          variant="outline" 
+                          className="w-full justify-start gap-3 py-6 rounded-2xl border-gray-100 hover:bg-gray-50 transition-all font-bold text-sm"
+                        >
+                          <Lock size={18} className="text-accent" />
+                          Change Admin Password
+                        </Button>
+                      ) : (
+                        <form onSubmit={handleChangePassword} className="space-y-4 bg-gray-50 p-6 rounded-2xl">
+                          <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-gray-400">Current Password</label>
+                            <Input 
+                              type="password"
+                              value={passwordForm.currentPassword}
+                              onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                              className="bg-white border-none rounded-xl"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-gray-400">New Password</label>
+                            <Input 
+                              type="password"
+                              value={passwordForm.newPassword}
+                              onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                              className="bg-white border-none rounded-xl"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-gray-400">Confirm Password</label>
+                            <Input 
+                              type="password"
+                              value={passwordForm.confirmPassword}
+                              onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                              className="bg-white border-none rounded-xl"
+                            />
+                          </div>
+                          <div className="flex gap-4 pt-4">
+                            <Button 
+                              type="submit" 
+                              disabled={isChangingPassword}
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl"
+                            >
+                              {isChangingPassword ? 'Updating...' : 'Update Password'}
+                            </Button>
+                            <Button 
+                              type="button"
+                              onClick={() => {
+                                setShowPasswordForm(false);
+                                setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                              }}
+                              variant="outline"
+                              className="flex-1 py-3 rounded-xl border-gray-200"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </form>
+                      )}
                     </div>
                   </div>
                 </div>
