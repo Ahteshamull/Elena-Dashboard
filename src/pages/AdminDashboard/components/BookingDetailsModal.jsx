@@ -201,7 +201,7 @@ export const BookingDetailsModal = ({ bookingId, onClose }) => {
                           src={
                             chef.profile.image.startsWith("http")
                               ? chef.profile.image
-                              : `https://elena-backend-eaoh.onrender.com${chef.profile.image}`
+                              : `https://api.tableli.com${chef.profile.image}`
                           }
                           alt={chef.profile.fullName}
                           className="w-full h-full object-cover"

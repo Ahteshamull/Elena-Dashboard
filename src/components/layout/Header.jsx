@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, ShieldCheck, Bell } from 'lucide-react';
+import { 
+  LogOut, ShieldCheck, Bell, Menu, X, 
+  LayoutDashboard, UserCheck, Users, User, 
+  Calendar, CreditCard, Settings 
+} from 'lucide-react';
 import { useGetNotificationsQuery } from '../../redux/api/notificationApiSlice';
 
 export default function Header() {
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const isAuthPage = location.pathname.startsWith('/auth');
+  
+  const menuItems = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, path: '/admin' },
+    { id: 'chef-requests', label: 'Chef Requests', icon: UserCheck, path: '/admin/chef-requests' },
+    { id: 'manage-chefs', label: 'Manage Chefs', icon: Users, path: '/admin/chefs' },
+    { id: 'manage-users', label: 'Manage Users', icon: User, path: '/admin/users' },
+    { id: 'bookings', label: 'All Bookings', icon: Calendar, path: '/admin/bookings' },
+    { id: 'payouts', label: 'Payouts', icon: CreditCard, path: '/admin/payouts' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/admin/settings' },
+  ];
   
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userName = user.name || user.userName || 'System Administrator';
@@ -25,6 +40,20 @@ export default function Header() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Prevent body scroll when menu is open
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [menuOpen]);
+
+  // Close menu on route change
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   if (isAuthPage) return null;
 
@@ -61,10 +90,59 @@ export default function Header() {
           
           <button 
             onClick={handleLogout}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all border border-gray-100 group shadow-sm"
+            className="hidden md:flex items-center justify-center w-10 h-10 rounded-full bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all border border-gray-100 group shadow-sm"
             title="Logout"
           >
             <LogOut size={18} className="group-hover:-translate-x-0.5 transition-transform" />
+          </button>
+          
+          {/* Mobile Menu Toggle */}
+          <button
+            className="md:hidden p-2 text-gray-500 hover:text-primary-900 transition-colors"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            {menuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Menu Drawer */}
+      <div
+        className={`md:hidden fixed top-20 left-0 right-0 bottom-0 bg-white z-40 transition-transform duration-300 ease-in-out overflow-y-auto ${
+          menuOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex flex-col p-6 gap-2">
+          {menuItems.map((item) => {
+            const isActive = item.path === '/admin' 
+              ? location.pathname === '/admin' || location.pathname === '/admin/'
+              : location.pathname.startsWith(item.path);
+            const Icon = item.icon;
+            
+            return (
+              <Link
+                key={item.id}
+                to={item.path}
+                className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${
+                  isActive 
+                    ? "bg-primary-50 text-primary-900 font-bold" 
+                    : "text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                <Icon size={20} className={isActive ? "text-accent" : ""} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+          
+          <div className="h-px bg-gray-100 my-4" />
+          
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-4 p-4 rounded-2xl text-red-500 hover:bg-red-50 transition-all font-bold"
+          >
+            <LogOut size={20} />
+            <span>Log Out</span>
           </button>
         </div>
       </div>

@@ -88,7 +88,7 @@ const ManageChefs = () => {
     availableDates: chef.profile?.availableDates || [],
     specialty: chef.profile?.cuisineSpecialties?.join(" • ") || "N/A",
     image: chef.profile?.image
-      ? `https://elena-backend-eaoh.onrender.com${chef.profile.image}`
+      ? `https://api.tableli.com${chef.profile.image}`
       : `https://ui-avatars.com/api/?name=${encodeURIComponent(chef.profile?.fullName || chef.userName || "Chef")}&background=random`,
     status: chef.status === "active" ? "Active" : "Suspended",
     rating: 0,

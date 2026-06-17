@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminSidebar } from './components/AdminSidebar';
-import { AdminBottomNav } from './components/AdminBottomNav';
 import AdminOverview from './components/AdminOverview';
 import ChefVerification from './components/ChefVerification';
 import ManageChefs from './components/ManageChefs';
@@ -39,8 +38,6 @@ const AdminDashboard = () => {
           </Routes>
         </div>
       </main>
-
-      <AdminBottomNav />
     </div>
   );
 };

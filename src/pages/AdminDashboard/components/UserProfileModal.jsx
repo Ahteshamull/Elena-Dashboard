@@ -48,7 +48,7 @@ export const UserProfileModal = ({ userId, onClose }) => {
                       src={
                         user.image.startsWith("http")
                           ? user.image
-                          : `https://elena-backend-eaoh.onrender.com${user.image}`
+                          : `https://api.tableli.com${user.image}`
                       }
                       alt={user.userName}
                       className="w-full h-full object-cover"

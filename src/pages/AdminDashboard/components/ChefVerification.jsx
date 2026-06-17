@@ -37,7 +37,7 @@ const ChefVerification = () => {
       profile.userId?.userName ||
       "Unknown Chef",
     avatar: profile.image
-      ? `https://elena-backend-eaoh.onrender.com${profile.image}`
+      ? `https://api.tableli.com${profile.image}`
       : `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || profile.displayName || "Chef")}&background=random`,
     location:
       `${profile.city || ""}, ${profile.country || ""}`
