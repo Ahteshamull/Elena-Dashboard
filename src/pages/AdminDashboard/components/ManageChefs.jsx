@@ -329,7 +329,7 @@ const ManageChefs = () => {
       {/* Mobile Card View */}
       <div className="lg:hidden space-y-4">
         {filteredChefs.map((chef) => (
-          <Card key={chef.id} className="border-none shadow-sm">
+          <Card key={chef.id} className="border-none shadow-sm overflow-visible">
             <CardContent className="p-5">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
