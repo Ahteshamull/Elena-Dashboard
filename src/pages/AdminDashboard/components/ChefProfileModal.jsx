@@ -60,7 +60,7 @@ export const ChefProfileModal = ({ userId, onClose }) => {
                 <img
                   src={
                     profile.image
-                      ? `https://api.tableli.com${profile.image}`
+                      ? `${import.meta.env.VITE_BASE_URL}${profile.image}`
                       : `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || "Chef")}&background=random`
                   }
                   alt={profile.fullName}
@@ -315,7 +315,7 @@ export const ChefProfileModal = ({ userId, onClose }) => {
                         {profile.dishPhotography.map((img, idx) => (
                           <img
                             key={idx}
-                            src={`https://api.tableli.com${img}`}
+                            src={`${import.meta.env.VITE_BASE_URL}${img}`}
                             alt="Dish"
                             className="w-full h-32 object-cover rounded-xl shadow-sm border border-gray-100"
                           />
@@ -332,7 +332,7 @@ export const ChefProfileModal = ({ userId, onClose }) => {
                         {profile.eventHighlights.map((img, idx) => (
                           <img
                             key={idx}
-                            src={`https://api.tableli.com${img}`}
+                            src={`${import.meta.env.VITE_BASE_URL}${img}`}
                             alt="Event"
                             className="w-full h-32 object-cover rounded-xl shadow-sm border border-gray-100"
                           />
@@ -360,7 +360,7 @@ export const ChefProfileModal = ({ userId, onClose }) => {
                     doc.url ? (
                       <a
                         key={idx}
-                        href={`https://api.tableli.com${doc.url}`}
+                        href={`${import.meta.env.VITE_BASE_URL}${doc.url}`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200"

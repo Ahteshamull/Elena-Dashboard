@@ -29,31 +29,40 @@ const ChefVerification = () => {
 
   const apiProfiles = apiResponse?.data || [];
 
-  const pendingChefs = apiProfiles.map((profile) => ({
-    id: profile.userId?._id || profile.userId || profile._id,
-    name:
-      profile.fullName ||
-      profile.displayName ||
-      profile.userId?.userName ||
-      "Unknown Chef",
-    avatar: profile.image
-      ? `https://api.tableli.com${profile.image}`
-      : `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || profile.displayName || "Chef")}&background=random`,
-    location:
-      `${profile.city || ""}, ${profile.country || ""}`
-        .trim()
-        .replace(/^,|,$/g, "") || "N/A",
-    specialty: profile.cuisineSpecialties?.join(" • ") || "N/A",
-    experience: profile.yearsOfExperience
-      ? `${profile.yearsOfExperience} yrs exp`
-      : "N/A",
-    documents: [
-      profile.cv ? "CV" : null,
-      profile.governmentId ? "ID" : null,
-      profile.foodSafetyCertificate ? "Certificate" : null,
-    ].filter(Boolean),
-    appliedDate: new Date(profile.createdAt).toLocaleDateString(),
-  }));
+  const pendingChefs = apiProfiles.map((profile) => {
+    const name = profile.fullName || profile.displayName || profile.userId?.userName || "Unknown Chef";
+    let imageUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+    
+    if (profile.image) {
+      if (profile.image.startsWith("http")) {
+        imageUrl = profile.image;
+      } else {
+        const baseUrl = import.meta.env.VITE_BASE_URL?.replace(/\/+$/, "") || "";
+        const cleanPath = profile.image.replace(/\\/g, "/").replace(/^\/+/, "");
+        imageUrl = `${baseUrl}/${cleanPath}`;
+      }
+    }
+
+    return {
+      id: profile.userId?._id || profile.userId || profile._id,
+      name: name,
+      avatar: imageUrl,
+      location:
+        `${profile.city || ""}, ${profile.country || ""}`
+          .trim()
+          .replace(/^,|,$/g, "") || "N/A",
+      specialty: profile.cuisineSpecialties?.join(" • ") || "N/A",
+      experience: profile.yearsOfExperience
+        ? `${profile.yearsOfExperience} yrs exp`
+        : "N/A",
+      documents: [
+        profile.cv ? "CV" : null,
+        profile.governmentId ? "ID" : null,
+        profile.foodSafetyCertificate ? "Certificate" : null,
+      ].filter(Boolean),
+      appliedDate: new Date(profile.createdAt).toLocaleDateString(),
+    };
+  });
 
   const handleApprove = async (id) => {
     const result = await Swal.fire({
@@ -134,7 +143,11 @@ const ChefVerification = () => {
                     <img
                       src={chef.avatar}
                       alt={chef.name}
-                      className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
+                      className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover shadow-md border-2 border-white ring-2 ring-gray-50 hover:shadow-lg hover:scale-105 transition-all duration-300"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(chef.name)}&background=random`;
+                      }}
                     />
                     <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white p-1 rounded-full border-2 border-white">
                       <Clock size={12} />
